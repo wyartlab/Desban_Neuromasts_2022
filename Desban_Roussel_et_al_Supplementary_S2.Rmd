@@ -1,0 +1,2360 @@
+---
+title: "Lateral line hair cells integrate mechanical and chemical cues to orient navigation"
+subtitle: "Data S2 - Statistical analysis"
+author: 
+  - Laura Desban, Julian Roussel, Olivier Mirat, François-Xavier Lejeune,   
+  - Ludovic Keiser, Nicolas Michalski, Claire Wyart
+date: "`r Sys.Date()`"
+output:
+  pdf_document:
+    number_sections: yes
+    toc: yes
+  html_document:
+    df_print: paged
+    toc: yes
+    number_sections: yes
+  word_document:
+    toc: yes
+sansfont: Calibri Light
+header-includes: \usepackage{color}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(openxlsx)
+library(reshape2)
+library(ggplot2)
+library(ggpubr)
+library(RColorBrewer)
+library(influence.ME)
+library(lme4)
+library(car)
+library(emmeans)
+library(knitr)
+```
+
+\newpage
+
+# Method
+
+All statistical analyses were conducted using R version 3.6.1 (R Development Core Team, 2019) and plots were generated with the ggplot2 package (Wickham, 2016). Within and between group differences and changes were examined using linear mixed-effects models (LMMs). Specifically, models were built for parameters of interest including Bout frequency, Speed, Percentage of routine turns and Percentage of time swimming. For each model, zebrafish larvae with influential observations over all the parameters were identified and excluded at a Cook's distance greater than twice the amount of the cutoff value of 4/n (up to five larvae) using the R package influence.ME (v0.9-9) (Bollen and Jackman, 1985). 
+
+In the first study [effect of 5-HT], the factors Condition (5-HT versus E3), Time (t0 versus t10), and their interaction terms were regarded as fixed effects. Fish identifier was assigned as a random effect (intercept) nested within the different experiments to account for the repeated measurements by animal. All LMMs were fitted using restricted maximum-likelihood estimation (REML) with the function lmer in the lme4 package (Bates et al., 2015) (v1.1-21). Significance for the main effects and the two-way interaction of Condition and Time was assessed based on Type II Wald chi-square tests using the function Anova in the car package (v3.0-7). Post hoc pairwise comparisons were carried out on a significant interaction effect with the emmeans package (v1.4.5) to further determine where the differences occurred across the subgroups of larvae. A square root transformation was applied to the speed data prior to modeling to improve the model assumptions of linearity, normality and constant variance of residuals. P-values resulting from the post hoc tests were obtained using Kenward-Roger’s approximation for degrees of freedom, and after adjustment with the Tukey's method to account for the multiplicity of contrasts. Results of the post hoc tests were also reported with the values of the estimated marginal means or estimated marginal mean differences from emmeans, with speed data back-transformed from square root to original scale.
+
+In the second study [effect of 5-HT gradient], the same approach was used to investigate the effect of 5-HT concentration on the three parameters Bout frequency, Speed, Percentage of routine turns, by including the factors Condition (5-HT versus E3), Distance (considered as a categorical variable with seven levels: 1cm, 3cm, 5cm, 7cm, 9cm, 11cm, 13cm), and their interaction terms as fixed effects, with the same random effects as above, in the LMMs. Post hoc pairwise comparisons were carried out on a significant effect of Distance or interaction.
+
+The aim of the last three studies [effect of 5-HT on either CuSO4-treated larvae, PLL-ablated or OMP-ablated larvae] was to investigate the additional effect of either CuSO4 treatment, PLL ablation or OMP ablation in larvae on Speed and Percentage of time swimming. In this analysis, LMMs included the fixed effects of Condition (5-HT versus EM), Treatment (for Sham ablation versus either PLL or OMP Ablation), Time (t0 versus t10), and their interaction terms as fixed effects, with the same random effects as above. Pairwise comparisons were carried out on the group estimated marginal means (emmeans) from significant higher-level interactions.
+The level of statistical significance was set at $p$ or adjusted $p$ < 0.05 for all tests.
+
+References
+
+R Core Team (2019). R: A language and environment for statistical computing. R Foundation for Statistical Computing, Vienna, Austria. URL https://www.R-project.org/.
+
+Bates D, Maechler M, Bolker B, Walker S. Fitting Linear Mixed Effects Models Using lme4. J Stat Softw. 2015;67:1–48.
+
+Bollen KA, Jackman RW. Regression Diagnostics: An Expository Treatment of Outliers and Influential Cases. Sociol Methods Res. 1985; 13: 510-542.
+
+Wickham H. 2016. Ggplot2: Elegant Graphics for Data Analysis. Springer.
+
+\newpage
+
+```{r import, echo = FALSE, warning = FALSE, message = FALSE}
+file1 <- "Data/Effect_5HT.xlsx"
+file2 <- "Data/Effect_BAPTA&5HT.xlsx"
+file3 <- "Data/Effect_CuSO4&5HT.xlsx"
+file4 <- "Data/Effects_Local5HT_Speed.xlsx"
+file5 <- "Data/Effects_Local5HT_FQ.xlsx"
+file6 <- "Data/Effects_Local5HT_Turns.xlsx"
+file7 <- "Data/Effect_PLLAblation&5HT.xlsx"
+file8 <- "Data/Effect_OlfactoryAblation&5HT.xlsx"
+
+for (i in 1:8) {
+  x <- openxlsx::read.xlsx(get(paste0("file",i)), 
+                       sheet = 1, rowNames = FALSE, colNames = TRUE, startRow = 1)
+  x$Condition <- factor(gsub("'", "", x$Condition))
+  if (i %in% c(1:3, 7:8)) { x$Trial_ID <- factor(gsub("'", "", x$Trial_ID)) }
+  if (i %in% 7:8) { x$Treatment <- factor(gsub("'", "", x$Treatment)) }
+  assign(paste0("dat", i), x)
+  rm(x)
+}
+
+stat.quanti <- function(x, dec = 3) 
+  paste(paste(round(mean(x, na.rm = TRUE),dec), "\u00B1", round(sd(x, na.rm = TRUE),dec), 
+              sep = " "),
+  paste0("(n = ",length(na.omit(x)), ", r = ", paste(round(range(na.omit(x)), dec), collapse = "-"), ")"))
+```
+
+# Effect of 5-HT (Figure 2D-G)
+
+## Check for influential observations (Cook's distance)
+
+We excluded five larvae: FishID 40, FishID 43, FishID 62, FishID 83 and FishID 95.
+
+```{r, echo = FALSE, warning = FALSE, message = FALSE}
+tmp <- dat1
+
+df1 <- data.frame(tmp[,c("Fish_ID", "Trial_ID", "Condition", "Swim_t0", "Speed_t0", "FQ_t0", "Turns_t0")], 
+             Time = "t0")
+df2 <- data.frame(tmp[,c("Fish_ID", "Trial_ID", "Condition", "Swim_t10", "Speed_t10", "FQ_t10", "Turns_t10")], 
+             Time = "t10")
+colnames(df1) <- colnames(df2) <- c("Fish_ID", "Trial_ID", "Condition", "Swim", "Speed", "FQ", "Turns", "Time")
+
+df <- rbind(df1, df2)
+
+df$Speed <- as.numeric(df$Speed)
+df$Turns <- as.numeric(df$Turns)
+df <- na.omit(df)
+
+# fitlmm1 <- lmer(sqrt(Speed) ~ Condition*Time + (1|Trial_ID/Fish_ID), data = df)
+# fitlmm2 <- lmer(FQ ~ Condition*Time + (1|Trial_ID/Fish_ID), data = df)
+# fitlmm3 <- lmer(Turns ~ Condition*Time + (1|Trial_ID/Fish_ID), data = df)
+# fitlmm4 <- lmer(Swim ~ Condition*Time + (1|Trial_ID/Fish_ID), data = df)
+# 
+# infl1 <- influence(fitlmm1, obs = TRUE)
+# infl2 <- influence(fitlmm2, obs = TRUE)
+# infl3 <- influence(fitlmm3, obs = TRUE)
+# infl4 <- influence(fitlmm4, obs = TRUE)
+# 
+# infl.pts <- data.frame(FishID = df$Fish_ID, Condition = df$Condition, Time = df$Time,
+#                   Speed = df$Speed, FQ = df$FQ, Turns = df$Turns, Swim = df$Swim,
+#                   CookD1 = cooks.distance.estex(infl1),
+#                   CookD2 = cooks.distance.estex(infl2),
+#                   CookD3 = cooks.distance.estex(infl3),
+#                   CookD4 = cooks.distance.estex(infl4) )
+# 
+# s <- 2*4/nrow(dat1)
+# 
+# outlier <- infl.pts$CookD1 > s | infl.pts$CookD2 > s | infl.pts$CookD3 > s | infl.pts$CookD4 > s
+# 
+# infl.pts <- data.frame( infl.pts,
+#             outlier.Speed = infl.pts$CookD1 > s,
+#             outlier.FQ = infl.pts$CookD2 > s,
+#             outlier.Turns = infl.pts$CookD3 > s,
+#             outlier.Swim = infl.pts$CookD4 > s )
+# 
+# infl.pts <- infl.pts[outlier,]
+# 
+# outlier <- sort(unique(infl.pts$FishID))
+# 
+# infl.pts[, c("Swim", "Speed", "FQ", "Turns", "CookD1", "CookD2", "CookD3", "CookD4")] <- round(infl.pts[, c("Swim", "Speed", "FQ", "Turns", "CookD1", "CookD2", "CookD3", "CookD4")], 3)
+# 
+# d1 <- data.frame( infl.pts[ infl.pts$outlier.Speed == TRUE, c("FishID", "Condition", "Time", "Speed", "CookD1")],
+#             parameter = "Speed" )
+# d2 <- data.frame( infl.pts[ infl.pts$outlier.Swim == TRUE, c("FishID", "Condition", "Time", "Swim", "CookD2")],
+#             parameter = "FQ" )
+# d3 <- data.frame( infl.pts[ infl.pts$outlier.Turns == TRUE, c("FishID", "Condition", "Time", "Turns", "CookD3")],
+#             parameter = "Turns" )
+# d4 <- data.frame( infl.pts[ infl.pts$outlier.Swim == TRUE, c("FishID", "Condition", "Time", "Swim", "CookD4")],
+#             parameter = "Swim" )
+# 
+# colnames(d1) <- colnames(d2) <- colnames(d3) <- colnames(d4) <- c("FishID", "Condition", "Time", "Value", "CookD", "Parameter")
+# 
+# d0 <- rbind(d1, d2, d3, d4)
+# 
+# write.table(d0, "Data/InfluentialPoints_Effect_5HT.txt", row.names = TRUE, col.names = NA, sep = "\t", quote = FALSE)
+
+d0 <- read.table("Data/InfluentialPoints_Effect_5HT.txt", row.names = 1, header = TRUE, sep = "\t")
+d0 <- d0[order(d0$FishID, d0$Parameter, d0$Time),]
+
+kable(d0, align = "c", caption = "Influential observations across all the parameters")
+
+outlier <- c(40, 43, 62, 83, 95)
+if (length(outlier) > 0) df <- df[ !(df$Fish_ID %in% outlier), ]
+```
+
+\newpage
+
+## Percentage of time swimming (Figure 2D)
+
+### Descriptive data
+
+```{r, echo = FALSE}
+stat <- with( df, data.frame( tapply(Swim, list(Condition, Time), stat.quanti, dec = 2) ) )
+stat <- t(stat)
+rownames(stat) <- gsub("X", "", rownames(stat))
+
+kable(stat, caption = "Percentage of time swimming by Condition and Time", align = "c")
+```
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 6, fig.height = 4.5, message = FALSE, warning = FALSE}
+ggplot(data = df, aes(x = Time, y = Swim, group = Fish_ID, color = Condition)) + 
+  geom_point(size = 1, show.legend = FALSE) + 
+  geom_line(size = .3, show.legend = FALSE) +
+  scale_y_continuous(breaks = seq(0,100, 10)) +
+  geom_smooth(aes(group = Condition), method = "lm", 
+              formula = y ~ x, size = 1, se = TRUE, color = "black") +
+  theme_classic() +
+  scale_color_manual(values = brewer.pal(n = 3, "Dark2")) + 
+  ylab("% time swimming") +
+  facet_wrap(~ Condition) +
+  theme( 
+    axis.text = element_text(color = "black"),
+    axis.title.x = element_blank() )
+```
+
+\newpage
+
+### Linear mixed model with Wald chi-square tests 
+
+Significant interaction between Condition (5-HT, E3) and Time (t0, t10) on the percentage of time swimming (Wald $\chi^2$ = 13.03, df = 1, $^{***}p$ = 0.0003).
+
+```{r, echo = FALSE}
+fitlmm <- lmer(Swim ~ Condition*Time + (1|Trial_ID/Fish_ID), data = df)
+car::Anova(fitlmm)
+```
+
+\newpage
+
+### Tukey's post hoc tests
+
+Table: Post hoc pairwise comparisons with Tukey's method - Mean differences between t0 and t10 by Condition
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 2.5, message = FALSE}
+emm.out <- emmeans(fitlmm, pairwise ~ Time | Condition)$emmeans
+kable(emm.out)
+emm.out <- emmeans(fitlmm, pairwise ~ Time | Condition)$contrasts
+emm.out0 <- emm.out
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + 
+  theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 8), axis.text.y = element_text(size = 10, color = "black") )
+```
+
+\newpage
+
+Table: Post hoc pairwise comparisons with Tukey's method - Mean differences between E3 and 5-HT at t0 and t10
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 2.5}
+emm.out <- emmeans(fitlmm, pairwise ~ Condition | Time)$emmeans
+kable(emm.out)
+emm.out <- emmeans(fitlmm, pairwise ~ Condition | Time)$contrasts
+emm.out0 <- emm.out
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 8), axis.text.y = element_text(size = 10, color = "black") )
+```
+
+\newpage
+
+### Checking model assumptions
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 6.5, fig.height = 3.5}
+par(mfrow = c(1,2), las = 1)
+hist(residuals(fitlmm), xlab = "residuals", ylab = "density",
+     cex.main = 1, cex.axis = .9,
+     main = "Histogram of residuals", proba = TRUE)
+qqnorm(residuals(fitlmm), cex.main = 1, cex.axis = .9, main = "Normal Q-Q Plot", cex = .4)
+```
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 3.5, fig.height = 3.2}
+plot(fitlmm, cex = .5, col = "dodgerblue4")
+```
+
+### Conclusion
+
+\textcolor{red}{Type II Wald chi-square tests for the fitted model indicated a significant interaction effect between Condition and Time on the percentage of time swimming (Wald $\chi^2$ = 13.03, df = 1, $^{***}p$ = 0.0003). Post hoc tests using Tukey's method showed significant differences between t0 and t10 in 5-HT ($^{***}p$ = 0.0002), and between E3 and 5-HT at t10 ($^{***}p$ = 0.0007), while there was no significant difference between t0 and t10 in E3 ($^{ns}p$ = 0.18), and between E3 and 5-HT at t0 ($^{ns}p$ = 0.59).}
+
+\newpage
+
+## Bout frequency (Figure 2E)
+
+### Descriptive data
+
+```{r, echo = FALSE}
+stat <- with( df, data.frame( tapply(FQ, list(Condition, Time), stat.quanti, dec = 2) ) )
+stat <- t(stat)
+rownames(stat) <- gsub("X", "", rownames(stat))
+
+kable(stat, caption = "Bout frequency by Condition and Time", align = "c")
+```
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 6, fig.height = 4.5, message = FALSE, warning = FALSE}
+ggplot(data = df, aes(x = Time, y = FQ, group = Fish_ID, color = Condition)) + 
+  geom_point(size = 1, show.legend = FALSE) + 
+  geom_line(size = .3, show.legend = FALSE) +
+  geom_smooth(aes(group = Condition), method = "lm", 
+              formula = y ~ x, size = 1, se = TRUE, color = "black") +
+  scale_y_continuous(breaks = seq(0, 6, .5)) +
+  theme_classic() +
+  scale_color_manual(values = brewer.pal(n = 3, "Dark2")) +
+  ylab(as.expression(bquote("Bout frequency" ~ (s^{-1})))) +
+  facet_wrap(~ Condition) +
+  theme( 
+    axis.text = element_text(color = "black"),
+    axis.title.x = element_blank() )
+```
+
+\newpage
+
+### Linear mixed model with Wald chi-square tests 
+
+Significant interaction effect of Condition (5-HT, E3) and Time (t0, t10) on Bout frequency (Wald $\chi^2$ = 10.34, df = 1, $^{**}p$ = 0.0013).
+
+```{r, echo = FALSE}
+fitlmm <- lmer(FQ ~ Condition*Time + (1|Trial_ID/Fish_ID), data = df)
+car::Anova(fitlmm)
+```
+
+\newpage
+
+### Tukey's post hoc tests
+
+Table: Post hoc pairwise comparisons with Tukey's method - Mean differences between t0 and t10 by Condition
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 2.5, message = FALSE}
+emm.out <- emmeans(fitlmm, pairwise ~ Time | Condition)$emmeans
+kable(emm.out)
+emm.out <- emmeans(fitlmm, pairwise ~ Time | Condition)$contrasts
+emm.out0 <- emm.out
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + 
+  theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 8), axis.text.y = element_text(size = 10, color = "black") )
+```
+
+\newpage
+
+Table: Post hoc pairwise comparisons with Tukey's method - Mean differences between E3 and 5-HT at t0 and t10
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 2.5}
+emm.out <- emmeans(fitlmm, pairwise ~ Condition | Time)$emmeans
+kable(emm.out)
+emm.out <- emmeans(fitlmm, pairwise ~ Condition | Time)$contrasts
+emm.out0 <- emm.out
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 8), axis.text.y = element_text(size = 10, color = "black") )
+```
+
+\newpage
+
+### Checking model assumptions
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 6.5, fig.height = 3.5}
+par(mfrow = c(1,2), las = 1)
+hist(residuals(fitlmm), xlab = "residuals", ylab = "density",
+     cex.main = 1, cex.axis = .9,
+     main = "Histogram of residuals", proba = TRUE)
+qqnorm(residuals(fitlmm), cex.main = 1, cex.axis = .9, main = "Normal Q-Q Plot", cex = .4)
+```
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 3.5, fig.height = 3.2}
+plot(fitlmm, cex = .5, col = "dodgerblue4")
+```
+
+### Conclusion
+
+\textcolor{red}{Type II Wald chi-square tests for the fitted model indicated a significant interaction effect between Condition and Time on Bout frequency (Wald $\chi^2$ = 10.34, df = 1, $^{**}p$ = 0.0013). Post hoc tests using Tukey's method showed significant differences between E3 and 5-HT at t10 ($^{**}p$ = 0.002), and between t0 and t10 in 5-HT ($^{**}p$ = 0.004), while no differences were observed between t0 and t10 in E3 ($^{ns}p$ = 0.10), and between E3 and 5-HT at t0 ($^{ns}p$ = 0.58).}
+
+\newpage
+
+## Speed (square root transformed data) (Figure 2F)
+
+### Descriptive data
+
+```{r, echo = FALSE}
+stat <- with( df, data.frame( tapply(sqrt(Speed), list(Condition, Time), stat.quanti, dec = 2) ) )
+stat <- t(stat)
+rownames(stat) <- gsub("X", "", rownames(stat))
+
+kable(stat, caption = "Speed by Condition and Time", align = "c")
+```
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 6, fig.height = 4.5, message = FALSE, warning = FALSE}
+ggplot(data = df, aes(x = Time, y = Speed, group = Fish_ID, color = Condition)) + 
+  geom_point(size = 1, show.legend = FALSE) + 
+  geom_line(size = .3, show.legend = FALSE) +
+  scale_y_continuous(breaks = seq(0, 16, 1)) +
+  geom_smooth(aes(group = Condition), method = "lm", 
+              formula = y ~ x, size = 1, se = TRUE, color = "black") +
+  theme_classic() +
+  ylab(as.expression(bquote("Speed" ~ (mm.s^{-1})))) +
+  scale_color_manual(values = brewer.pal(n = 3, "Dark2")) +
+  theme( 
+    axis.text= element_text(color = "black"),
+    axis.title.x = element_blank() ) +
+  facet_wrap(~Condition)
+```
+
+\newpage
+
+### Linear mixed model with Wald chi-square tests
+
+Significant interaction effect between Condition (5-HT, E3) and Time (t0, t10) on Speed (Wald $\chi^2$ = 12.71, df = 1, $^{***}p$ = 0.0004).
+
+```{r, echo = FALSE}
+fitlmm <- lmer(sqrt(Speed) ~ Condition*Time + (1|Trial_ID/Fish_ID), data = df)
+car::Anova(fitlmm)
+```
+
+\newpage
+
+### Tukey's post hoc tests
+
+Table: Post hoc pairwise comparisons with Tukey's method - Mean differences between t0 and t10 by Condition (back-transformed estimate values from the sqrt scale)
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 2.5, message = FALSE}
+emm.out <- emmeans(fitlmm, ~ Time | Condition, type = "response")
+emm.out <- regrid(emm.out)
+kable(emm.out)
+emm.out <- pairs(emm.out)
+emm.out0 <- emm.out
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 8), axis.text.y = element_text(size = 10, color = "black") )
+```
+
+\newpage
+
+Table: Post hoc pairwise comparisons with Tukey's method - Mean differences between E3 and 5-HT at t0 and t10 (back-transformed estimate values from the sqrt scale)
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 2.5}
+emm.out <- emmeans(fitlmm, ~ Condition | Time, type = "response")
+emm.out <- regrid(emm.out)
+kable(emm.out)
+emm.out <- pairs(emm.out)
+emm.out0 <- emm.out
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + 
+  theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 8), axis.text.y = element_text(size = 10, color = "black") )
+```
+
+\newpage
+
+### Checking model assumptions
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 6.5, fig.height = 3.5}
+par(mfrow = c(1,2), las = 1)
+hist(residuals(fitlmm), xlab = "residuals", ylab = "density",
+     cex.main = 1, cex.axis = .9,
+     main = "Histogram of residuals", proba = TRUE)
+qqnorm(residuals(fitlmm), cex.main = 1, cex.axis = .9, main = "Normal Q-Q Plot", cex = .4)
+```
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 3.5, fig.height = 3.2}
+plot(fitlmm, cex = .5, col = "dodgerblue4")
+```
+
+### Conclusion
+
+\textcolor{red}{Type II Wald chi-square tests for the fitted model indicated a significant interaction effect between Condition and Time on Speed (Wald $\chi^2$ = 12.71, df = 1, $^{***}p$ = 0.0004). Post hoc tests using Tukey's method showed a difference between t0 and t10 in 5-HT ($^{***}p$ = 4.2e-8) (faster at t10), and between E3 and 5-HT at t10 ($^{***}p$ = 2.7e-5) (faster in 5-HT), while no differences were observed between t0 and t10 in E3 ($^{ns}p$ = 0.17), and between E3 and 5-HT at t0 ($^{ns}p$ = 0.82).}
+
+\newpage
+
+## Percentage of routine turns (Figure 2G)
+
+### Descriptive data
+
+```{r, echo = FALSE}
+stat <- with( df, data.frame( tapply(Turns, list(Condition, Time), stat.quanti, dec = 2) ) )
+stat <- t(stat)
+rownames(stat) <- gsub("X", "", rownames(stat))
+
+kable(stat, caption = "Percentage of routine turns by Condition and Time", align = "c")
+```
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 6, fig.height = 4.5, message = FALSE, warning = FALSE}
+ggplot(data = df, aes(x = Time, y = Turns, group = Fish_ID, color = Condition)) + 
+  geom_point(size = 1, show.legend = FALSE) + 
+  geom_line(size = .3, show.legend = FALSE) +
+  geom_smooth(aes(group = Condition), method = "lm", 
+              formula = y ~ x, size = 1, se = TRUE, color = "black") +
+  scale_y_continuous(breaks = seq(0,100, 5)) +
+  theme_classic() +
+  scale_color_manual(values = brewer.pal(n = 3, "Dark2")) + 
+  ylab("% routine turns") +
+  facet_wrap(~ Condition) +
+  theme( 
+    axis.text = element_text(color = "black"),
+    axis.title.x = element_blank() )
+```
+
+\newpage
+
+### Linear mixed model with Wald chi-square tests 
+
+Significant interaction between Condition (5-HT, E3) and Time (t0, t10) on the percentage of routine turns (Wald $\chi^2$ = 8.89, df = 1, $^{**}p$ = 0.003).
+
+```{r, echo = FALSE}
+fitlmm <- lmer(Turns ~ Condition*Time + (1|Trial_ID/Fish_ID), data = df)
+car::Anova(fitlmm)
+```
+
+\newpage
+
+### Tukey's post hoc tests
+
+Table: Post hoc pairwise comparisons with Tukey's method - Mean differences between t0 and t10 by Condition
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 2.5, message = FALSE}
+emm.out <- emmeans(fitlmm, pairwise ~ Time | Condition)$emmeans
+kable(emm.out)
+emm.out <- emmeans(fitlmm, pairwise ~ Time | Condition)$contrasts
+emm.out0 <- emm.out
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + 
+  theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 8), axis.text.y = element_text(size = 10, color = "black") )
+```
+
+\newpage
+
+Table: Post hoc pairwise comparisons with Tukey's method - Mean differences between E3 and 5-HT at t0 and t10
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 2.5}
+emm.out <- emmeans(fitlmm, pairwise ~ Condition | Time)$emmeans
+kable(emm.out)
+emm.out <- emmeans(fitlmm, pairwise ~ Condition | Time)$contrasts
+emm.out0 <- emm.out
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 8), axis.text.y = element_text(size = 10, color = "black") )
+```
+
+\newpage
+
+### Checking model assumptions
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 6.5, fig.height = 3.5}
+par(mfrow = c(1,2), las = 1)
+hist(residuals(fitlmm), xlab = "residuals", ylab = "density",
+     cex.main = 1, cex.axis = .9,
+     main = "Histogram of residuals", proba = TRUE)
+qqnorm(residuals(fitlmm), cex.main = 1, cex.axis = .9, main = "Normal Q-Q Plot", cex = .4)
+```
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 3.5, fig.height = 3.2}
+plot(fitlmm, cex = .5, col = "dodgerblue4")
+```
+
+### Conclusion
+
+\textcolor{red}{Type II Wald chi-square tests for the fitted model indicated a significant interaction effect between Condition and Time on then percentage of routine turns (Wald $\chi^2$ = 8.89, df = 1, $^{**}p$ = 0.003). Post hoc tests using Tukey's method showed significant differences between t0 and t10 in 5-HT ($^{***}p$ = 3.8e-6), and between E3 and 5-HT at t10 ($^{***}p$ = 7.5e-6), while there was no significant difference between t0 and t10 in E3 ($^{ns}p$ = 0.60), and between E3 and 5-HT at t0 ($^{ns}p$ = 0.17).}
+
+\newpage
+
+# Effect of 5-HT gradient (Figure 2I-K)
+
+## Check for influential observations (Cook's distance)
+
+We removed three larvae: FishID 55, FishID 57 and FishID 112.
+
+```{r, echo = FALSE, warning = FALSE, message = FALSE}
+df1 <- melt(data = dat4, id.vars = c("Fish_ID", "Condition", "Outlier"))
+df2 <- melt(data = dat5, id.vars = c("Fish_ID", "Condition", "Outlier"))
+df3 <- melt(data = dat6, id.vars = c("Fish_ID", "Condition", "Outlier"))
+
+df1 <- df1[,c("Fish_ID", "Condition", "variable", "value")]
+df2 <- df2[,c("Fish_ID", "Condition", "variable", "value")]
+df3 <- df3[,c("Fish_ID", "Condition", "variable", "value")]
+
+df1$Distance <- as.numeric(gsub("cm", "", df1$variable))
+df1$Distance2 <- df1$variable
+df1$Condition <- factor(df1$Condition) 
+df1$value <- as.numeric(df1$value)
+df2$value <- as.numeric(df2$value)
+df3$value <- as.numeric(df3$value)
+
+df <- cbind(df1[,c("Fish_ID", "Condition", "Distance", "Distance2", "value")], 
+            df2$value, df3$value)
+
+colnames(df) <- c("Fish_ID", "Condition", "Distance", "Distance2", "Speed", "FQ", "Turns")
+
+df <- na.omit(df)
+df$Condition <- factor(df$Condition)
+
+# fitlmm1 <- lmer(sqrt(Speed) ~ Condition*Distance2 + (1|Fish_ID), data = df)
+# fitlmm2 <- lmer(FQ ~ Condition*Distance2 + (1|Fish_ID), data = df)
+# fitlmm3 <- lmer(Turns ~ Condition*Distance2 + (1|Fish_ID), data = df)
+# 
+# infl1 <- influence(fitlmm1, obs = TRUE)
+# infl2 <- influence(fitlmm2, obs = TRUE)
+# infl3 <- influence(fitlmm3, obs = TRUE)
+# 
+# infl.pts <- data.frame(FishID = df$Fish_ID, Condition = df$Condition, Distance = df$Distance2,
+#                   Speed = df$Speed, FQ = df$FQ, Turns = df$Turns,
+#                   CookD1 = cooks.distance.estex(infl1),
+#                   CookD2 = cooks.distance.estex(infl2),
+#                   CookD3 = cooks.distance.estex(infl3) )
+# 
+# s <- 2*4/nrow(dat6)
+# 
+# outlier <- infl.pts$CookD1 > s | infl.pts$CookD2 > s | infl.pts$CookD3 > s
+# 
+# infl.pts <- data.frame( infl.pts,
+#             outlier.Speed = infl.pts$CookD1 > s,
+#             outlier.FQ = infl.pts$CookD2 > s,
+#             outlier.Turns = infl.pts$CookD3 > s )
+# 
+# infl.pts <- infl.pts[outlier,]
+# 
+# # outlier <- sort(unique(infl.pts$FishID))
+# 
+# infl.pts[, c("Speed", "FQ", "Turns", "CookD1", "CookD2", "CookD3")] <- round(infl.pts[, c("Speed", "FQ", "Turns", "CookD1", "CookD2", "CookD3")], 3)
+# 
+# d1 <- data.frame( infl.pts[ infl.pts$outlier.Speed == TRUE, c("FishID", "Condition", "Distance", "Speed", "CookD1")],
+#             parameter = "Speed" )
+# d2 <- data.frame( infl.pts[ infl.pts$outlier.FQ == TRUE, c("FishID", "Condition", "Distance", "FQ", "CookD2")],
+#             parameter = "FQ" )
+# # d3 <- data.frame( infl.pts[ infl.pts$outlier.Turns == TRUE, c("FishID", "Condition", "Distance", "Turns", "CookD2")],
+# #             parameter = "Turns" )
+# 
+# colnames(d1) <- colnames(d2) <- c("FishID", "Condition", "Time", "Value", "CookD", "Parameter")
+# 
+# d0 <- rbind(d1, d2)
+# d0 <- d0[ order(d0$FishID),]
+# 
+# write.table(d0, "Data/InfluentialPoints_Local5HT.txt", row.names = TRUE, col.names = NA, sep = "\t", quote = FALSE)
+
+d0 <- read.table("Data/InfluentialPoints_Local5HT.txt", row.names = 1, header = TRUE, sep = "\t")
+d0 <- d0[order(d0$FishID, d0$Parameter, d0$Time),]
+
+kable(d0, align = "c", caption = "Influential observations across all the parameters")
+
+outlier <- c(55, 57, 112)
+
+if (length(outlier) > 0) df <- df[ !(df$Fish_ID %in% outlier), ]
+```
+
+\newpage
+
+## Bout frequency (Figure 2I)
+
+### Descriptive data
+
+```{r, echo = FALSE}
+stat <- with( df, data.frame( tapply(FQ, list(Distance2, Condition), stat.quanti, dec = 2) ) )
+stat <- stat[,c("E3", "Local.5.HT")]
+
+kable(stat, caption = "Bout frequency by Condition and Distance", align = "c")
+```
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 4.5, message = FALSE, warning = FALSE}
+ggplot(data = df, aes(x = Distance, y = FQ, group = Fish_ID, color = Condition)) + 
+  geom_point(size = .8) +
+  geom_line(size = .1, linetype = "dotted", alpha = .3) +
+  scale_x_continuous(breaks = seq(1, 13, 1)) +
+  scale_y_continuous(breaks = seq(0, 12, 1)) +
+  xlab("Distance (cm)") + 
+  ylab(as.expression(bquote("Bout frequency" ~ (s^{-1})))) +
+  geom_smooth(aes(group = Condition), method = "loess", formula = y ~ x, size = 1) +
+  theme_classic() +
+  scale_color_manual(values = brewer.pal(n = 3, "Dark2")) +
+  theme( 
+    axis.text = element_text(size = 11, color = "black"),
+    legend.position = "bottom" 
+  )
+```
+
+\newpage
+
+### Linear mixed model with Wald chi-square tests
+
+Significant interaction effect between Condition (Local 5-HT, E3) and Distance (as factor) on Bout frequency (Wald $\chi^2$ = 27.28, df = 6, $^{***}p$ = 0.00013).
+
+```{r, echo = FALSE}
+fitlmm <- lmer(FQ ~ Condition*Distance2 + (1|Fish_ID), data = df)
+car::Anova(fitlmm)
+```
+
+\newpage
+
+### Tukey's post hoc tests
+
+Table: Post hoc pairwise comparisons with Tukey's method - Mean differences between E3 and 5-HT at each distance
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 7}
+emm.out <- emmeans(fitlmm, ~ Condition | Distance2)
+kable(emm.out)
+emm.out <- pairs(emm.out)
+emm.out0 <- emm.out
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + 
+  theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 8), axis.text.y = element_text(size = 10, color = "black") )
+```
+
+\newpage
+
+Table: Post hoc pairwise comparisons with Tukey's method - Mean differences between the successive distance for E3 and 5-HT
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 4}
+emm.out <- emmeans(fitlmm, ~ Distance2 | Condition)
+kable(emm.out)
+emm.out <- contrast(emm.out, "consec")
+emm.out0 <- emm.out
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 8), axis.text.y = element_text(size = 10, color = "black") )
+```
+
+\newpage
+
+Table: Post hoc pairwise comparisons with Tukey's method - Changes in condition differences by concentration change
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 2.7}
+emm.out <- emmeans(fitlmm, ~ Distance2*Condition)
+kable(emm.out)
+emm.out <- contrast(emmeans(fitlmm, ~ Condition*Distance2),
+                  interaction = c("pairwise", "consec"), reverse = FALSE)
+emm.out0 <- emm.out
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + 
+  theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 8), axis.text.y = element_text(size = 10, color = "black") ) +
+  ylab("Interaction")
+```
+
+\newpage
+
+### Checking model assumptions
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 6.5, fig.height = 3.5}
+par(mfrow = c(1,2), las = 1)
+hist(residuals(fitlmm), xlab = "residuals", ylab = "density",
+     cex.main = 1, cex.axis = .9,
+     main = "Histogram of residuals", proba = TRUE)
+qqnorm(residuals(fitlmm), cex.main = 1, cex.axis = .9, main = "Normal Q-Q Plot", cex = .4)
+```
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 3.5, fig.height = 3.2}
+plot(fitlmm, cex = .5, col = "dodgerblue4")
+```
+
+### Conclusion
+
+\textcolor{red}{Type II Wald chi-square tests for the fitted model indicated a significant interaction effect between Condition and Distance on Bout frequency (Wald $\chi^2$ = 27.28, df = 6, $^{***}p$ = 0.00013). Post hoc tests using Tukey's method showed significant differences of Bout frequency between E3 and 5-HT at 1cm ($^{*}p$ = 0.02), 3cm ($^{*}p$ = 0.03), 5cm ($^{**}p$ = 0.005), 7cm ($^{***}p$ = 1.0e-9), 9cm ($^{***}p$ = 9.1e-5), 11cm ($^{**}p$ = 0.006) and 13cm ($^{*}p$ = 0.018) (faster in 5-HT); in E3 between 11cm and 13cm ($^{*}p$ = 0.02), and in Local 5-HT: between 3cm and 5cm ($^{**}p$ = 0.007), between 5cm and 7cm ($^{***}p$ = 2.4e-6), 7cm and 9cm ($^{***}p$ = 0.0004), 9cm and 11cm ($^{*}p$ = 0.03) and 11cm and 13cm ($^{**}p$ = 0.004). Moreover the difference (E3)-(5-HT) was significantly increased from 5cm to 7cm ($^{***}p$ = 0.0002) and significantly decreased from 7cm to 9cm ($^{*}p$ = 0.013).}
+
+\newpage
+
+## Speed (square root transformed data) (Figure 2J)
+
+### Descriptive data
+
+```{r, echo = FALSE}
+stat <- with( df, data.frame( tapply(Speed, list(Distance2, Condition), stat.quanti, dec = 2) ) )
+stat <- stat[,c("E3", "Local.5.HT")]
+
+kable(stat, caption = "Speed by Condition and Distance", align = "c")
+```
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 4.5, message = FALSE, warning = FALSE}
+ggplot(data = df, aes(x = Distance, y = Speed, group = Fish_ID, color = Condition)) + 
+  geom_point(size = .8) + 
+  geom_line(size = .1, linetype = "dotted", alpha = .3) +
+  scale_x_continuous(breaks = seq(1, 13, 1)) +
+  scale_y_continuous(breaks = seq(0, 30, 5)) +
+  xlab("Distance (cm)") + ylab(as.expression(bquote("Speed" ~ (mm.s^{-1})))) + 
+  geom_smooth(aes(group = Condition), method = "loess", formula = y ~ x, size = 1) +
+  theme_classic() +
+  scale_color_manual(values = brewer.pal(n = 3, "Dark2")) +
+  theme( 
+    axis.text = element_text(size = 11, color = "black"),
+    legend.position = "bottom")
+```
+
+\newpage
+
+### Linear mixed model with Wald chi-square tests
+
+Significant interaction effect between Condition (Local 5-HT, E3) and Distance (as factor) on Speed (Wald $\chi^2$ = 22.12, df = 6, $^{**}p$ = 0.0012)
+
+```{r, echo = FALSE}
+fitlmm <- lmer(sqrt(Speed) ~ Condition*Distance2 + (1|Fish_ID), data = df)
+car::Anova(fitlmm)
+```
+
+### Tukey's post hoc tests
+
+Table: Post hoc pairwise comparisons with Tukey's method - Mean differences between E3 and Local 5-HT at each distance point (back-transformed estimate values from the sqrt scale)
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 7, message = FALSE}
+emm.out <- emmeans(fitlmm, ~ Condition | Distance2, type = "response")
+emm.out <- regrid(emm.out)
+kable(emm.out)
+emm.out <- pairs(emm.out)
+emm.out0 <- emm.out
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + 
+  theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 8), axis.text.y = element_text(size = 10, color = "black") )
+```
+
+\newpage
+
+Table: Post hoc pairwise comparisons with Tukey's method - Mean differences between the successive distance points for E3 and Local 5-HT (back-transformed estimate values from the sqrt scale)
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 4}
+emm.out <- emmeans(fitlmm, ~ Distance2 | Condition, type = "response")
+emm.out <- regrid(emm.out)
+kable(emm.out)
+emm.out <- contrast(emm.out, "consec")
+emm.out0 <- emm.out
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + 
+  theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 8), axis.text.y = element_text(size = 10, color = "black") )
+```
+
+\newpage
+
+Table: Post hoc pairwise comparisons with Tukey's method - Changes in condition differences by concentration change (back-transformed estimate values from the sqrt scale)
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 2.7}
+emm.out <- emmeans(fitlmm, ~ Condition*Distance2, type = "response")
+emm.out <- regrid(emm.out)
+kable(emm.out)
+emm.out <- contrast(emm.out, interaction = c("pairwise", "consec"), reverse = FALSE)
+emm.out0 <- emm.out
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + 
+  theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 8), axis.text.y = element_text(size = 10, color = "black") ) +
+  ylab("Interaction")
+```
+
+\newpage
+
+### Checking model assumptions
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 6.5, fig.height = 3.5}
+par(mfrow = c(1,2), las = 1)
+hist(residuals(fitlmm), xlab = "residuals", ylab = "density",
+     cex.main = 1, cex.axis = .9,
+     main = "Histogram of residuals", proba = TRUE)
+qqnorm(residuals(fitlmm), cex.main = 1, cex.axis = .9, main = "Normal Q-Q Plot", cex = .4)
+```
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 3.5, fig.height = 3.2}
+plot(fitlmm, cex = .5, col = "dodgerblue4")
+```
+
+### Conclusion
+
+\textcolor{red}{Type II Wald chi-square tests for the fitted model indicated a significant interaction effect between Condition and Distance on Speed (Wald $\chi^2$ = 22.12, df = 6, $^{**}p$ = 0.0012). Post hoc tests using Tukey's method showed significant differences of speed between E3 and 5-HT at 1cm ($^{*}p$ = 0.03), 3cm ($^{*}p$ = 0.03), 5cm ($^{**}p$ = 0.008), 7cm ($^{***}p$ = 8.1e-9), 9cm ($^{***}p$ = 0.0007), 11cm ($^{***}p$ = 0.0009), and 13cm ($^{*}p$ = 0.02) (faster in 5-HT); and in 5-HT: between 5cm and 7cm ($^{***}p$ = 9.4e-5), 7cm and 9cm ($^{***}p$ = 0.0002) and between 11cm and 13cm ($^{***}p$ = 0.0003), and in Local 5-HT: between 5cm and 7cm ($^{*}p$ = 0.02), 7cm and 9cm ($^{***}p$ = 2.4e-5), and 11cm and 13cm ($^{***}p$ = 0.0009). Moreover the difference (E3)-(5-HT) was significantly increased from 5cm to 7cm ($^{***}p$ = 0.0004) and significantly decreased from 7cm to 9cm ($^{**}p$ = 0.005).}
+
+\newpage
+
+## Percentage of routine turns (Figure 2K)
+
+### Descriptive data
+
+```{r, echo = FALSE}
+stat <- with( df, data.frame( tapply(Turns, list(Distance2, Condition), stat.quanti, dec = 2) ) )
+stat <- stat[,c("E3", "Local.5.HT")]
+
+kable(stat, caption = "Turns by Condition and Distance", align = "c")
+```
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 4.5, message = FALSE, warning = FALSE}
+ggplot(data = df, aes(x = Distance, y = Turns, group = Fish_ID, color = Condition)) + 
+  geom_point(size = .8) + 
+  geom_line(size = .1, linetype = "dotted", alpha = .3) +
+  scale_x_continuous(breaks = seq(1, 13, 1)) +
+  xlab("Distance (cm)") + ylab("% routine turns") + 
+  geom_smooth(aes(group = Condition), method = "loess", formula = y ~ x, size = 1) +
+  theme_classic() +
+  scale_color_manual(values = brewer.pal(n = 3, "Dark2")) +
+  theme( 
+    axis.text = element_text(size = 11, color = "black"),
+    legend.position = "bottom")
+```
+
+\newpage
+
+### Linear mixed model with Wald chi-square tests
+
+Significant effects of Condition (Local 5-HT, E3) (Wald $\chi^2$ = 13.78, df = 1, $^{***}p$ = 0.0002) and Distance (as factor) (Wald $\chi^2$ = 68.78, df = 6, $^{***}p$ = 7.3e-13) on the percentage of routine turns, without effect of interaction (Wald $\chi^2$ = 3.41, df = 6, $^{ns}p$ = 0.76).
+
+```{r, echo = FALSE}
+fitlmm <- lmer(df$Turns ~ Condition*Distance2 + (1|Fish_ID), data = df)
+car::Anova(fitlmm)
+```
+
+### Tukey's post hoc tests
+
+Table: Post hoc pairwise comparisons with Tukey's method - Mean differences between the consecutive distance points
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 3, message = FALSE, message = FALSE}
+emm.out <- emmeans(fitlmm, ~ Distance2)
+kable(emm.out)
+emm.out <- contrast(emm.out, "consec")
+emm.out0 <- emm.out
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + 
+  theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 8), axis.text.y = element_text(size = 10, color = "black") )
+```
+
+\newpage
+
+Table: Post hoc pairwise comparisons with Tukey's method - Mean differences between E3 and Local 5-HT at each distance point
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 7, message = FALSE}
+emm.out <- emmeans(fitlmm, ~ Condition | Distance2, type = "response")
+kable(emm.out)
+emm.out <- pairs(emm.out)
+emm.out0 <- emm.out
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + 
+  theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 8), axis.text.y = element_text(size = 10, color = "black") )
+```
+
+\newpage
+
+Table: Post hoc pairwise comparisons with Tukey's method - Mean differences between the successive distance points for E3 and Local 5-HT
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 4}
+emm.out <- emmeans(fitlmm, ~ Distance2 | Condition, type = "response")
+kable(emm.out)
+emm.out <- contrast(emm.out, "consec")
+emm.out0 <- emm.out
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + 
+  theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 8), axis.text.y = element_text(size = 10, color = "black") )
+```
+
+\newpage
+
+Table: Post hoc pairwise comparisons with Tukey's method - Changes in condition differences by concentration change (back-transformed estimate values from the sqrt scale)
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 2.7}
+emm.out <- emmeans(fitlmm, ~ Condition*Distance2, type = "response")
+kable(emm.out)
+emm.out <- contrast(emm.out, interaction = c("pairwise", "consec"), reverse = FALSE)
+emm.out0 <- emm.out
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + 
+  theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 8), axis.text.y = element_text(size = 10, color = "black") ) +
+  ylab("Interaction")
+```
+
+\newpage
+
+### Checking model assumptions
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 6.5, fig.height = 3.5}
+par(mfrow = c(1,2), las = 1)
+hist(residuals(fitlmm), xlab = "residuals", ylab = "density",
+     cex.main = 1, cex.axis = .9,
+     main = "Histogram of residuals", proba = TRUE)
+qqnorm(residuals(fitlmm), cex.main = 1, cex.axis = .9, main = "Normal Q-Q Plot", cex = .4)
+```
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 3.5, fig.height = 3.2}
+plot(fitlmm, cex = .5, col = "dodgerblue4")
+```
+
+### Conclusion
+
+\textcolor{red}{Type II Wald chi-square tests for the fitted model indicated a significant interaction effects of Condition (Local 5-HT, E3) (Wald $\chi^2$ = 13.78, df = 1, $^{***}p$ = 0.0002) and Distance (as factor) (Wald $\chi^2$ = 68.78, df = 6, $^{***}p$ = 7.3e-13) on the percentage of routine turns, without interaction effect (Wald $\chi^2$ = 3.41, df = 6, $^{ns}p$ = 0.76). Post hoc tests using Tukey's method only showed significant differences of the percentage of routine turns between 3cm and 5cm ($^{**}p$ = 0.002) and between 11cm and 13cm ($^{**}p$ = 0.003).}
+
+\newpage
+
+# Effect of 5-HT on CuSO4-treated larvae (Figure 5A-B)
+
+## Check for influential observations (Cook's distance)
+
+We excluded two larvae: FishID 26 and FishID 179.
+
+```{r, echo = FALSE, warning = FALSE, message = FALSE}
+tmp <- dat3
+
+df1 <- data.frame(tmp[,c("Fish_ID", "Trial_ID", "Condition", "Swim_t0", "Speed_t0", "FQ_t0", "Turns_t0")], 
+             Time = "t0")
+df2 <- data.frame(tmp[,c("Fish_ID", "Trial_ID", "Condition", "Swim_t10", "Speed_t10", "FQ_t10", "Turns_t10")], 
+             Time = "t10")
+colnames(df1) <- colnames(df2) <- c("Fish_ID", "Trial_ID", "Condition", "Swim", "Speed", "FQ", "Turns", "Time")
+
+df <- rbind(df1, df2)
+
+df$Speed <- as.numeric(df$Speed)
+df$Turns <- as.numeric(df$Turns)
+df <- na.omit(df)
+
+# fitlmm1 <- lmer(sqrt(Speed) ~ Condition*Time + (1|Trial_ID/Fish_ID), data = df)
+# fitlmm2 <- lmer(FQ ~ Condition*Time + (1|Trial_ID/Fish_ID), data = df)
+# fitlmm3 <- lmer(Turns ~ Condition*Time + (1|Trial_ID/Fish_ID), data = df)
+# fitlmm4 <- lmer(Swim ~ Condition*Time + (1|Trial_ID/Fish_ID), data = df)
+# 
+# infl1 <- influence(fitlmm1, obs = TRUE)
+# infl2 <- influence(fitlmm2, obs = TRUE)
+# infl3 <- influence(fitlmm3, obs = TRUE)
+# infl4 <- influence(fitlmm4, obs = TRUE)
+# 
+# infl.pts <- data.frame(FishID = df$Fish_ID, Condition = df$Condition, Time = df$Time,
+#                   Speed = df$Speed, FQ = df$FQ, Turns = df$Turns, Swim = df$Swim,
+#                   CookD1 = cooks.distance.estex(infl1),
+#                   CookD2 = cooks.distance.estex(infl2),
+#                   CookD3 = cooks.distance.estex(infl3),
+#                   CookD4 = cooks.distance.estex(infl4) )
+# 
+# s <- 2*4/nrow(dat3)
+# 
+# outlier <- infl.pts$CookD1 > s | infl.pts$CookD2 > s | infl.pts$CookD3 > s | infl.pts$CookD4 > s
+# 
+# infl.pts <- data.frame( infl.pts,
+#             outlier.Speed = infl.pts$CookD1 > s,
+#             outlier.FQ = infl.pts$CookD2 > s,
+#             outlier.Turns = infl.pts$CookD3 > s,
+#             outlier.Swim = infl.pts$CookD4 > s )
+# 
+# infl.pts <- infl.pts[outlier,]
+# 
+# infl.pts[, c("Swim", "Speed", "FQ", "Turns", "CookD1", "CookD2", "CookD3", "CookD4")] <- round(infl.pts[, c("Swim", "Speed", "FQ", "Turns", "CookD1", "CookD2", "CookD3", "CookD4")], 3)
+# 
+# d1 <- data.frame( infl.pts[ infl.pts$outlier.Speed == TRUE, c("FishID", "Condition", "Time", "Speed", "CookD1")],
+#             parameter = "Speed" )
+# d2 <- data.frame( infl.pts[ infl.pts$outlier.FQ == TRUE, c("FishID", "Condition", "Time", "Speed", "CookD2")],
+#             parameter = "FQ" )
+# 
+# colnames(d1) <- colnames(d2) <- c("FishID", "Condition", "Time", "Value", "CookD", "Parameter")
+# 
+# d0 <- rbind(d1, d2)
+# 
+# colnames(d0) <- c("FishID", "Condition", "Time", "Value", "CookD", "Parameter")
+# 
+# write.table(d0, "Data/InfluentialPoints_Effect_CuSO4&5HT.txt", row.names = TRUE, col.names = NA, sep = "\t", quote = FALSE)
+
+d0 <- read.table("Data/InfluentialPoints_Effect_CuSO4&5HT.txt", row.names = 1, header = TRUE, sep = "\t")
+d0 <- d0[order(d0$FishID, d0$Parameter, d0$Time),]
+
+kable(d0, align = "c", caption = "Influential observations across all the parameters")
+
+outlier <- c(26, 179)
+
+if (length(outlier) > 0) df <- df[ !(df$Fish_ID %in% outlier), ]
+```
+
+\newpage
+
+## Percentage of time swimming (Figure 5A)
+
+### Descriptive data
+
+```{r, echo = FALSE}
+stat <- with( df, data.frame( tapply(Swim, list(Condition, Time), stat.quanti, dec = 2) ) )
+stat <- t(stat)
+rownames(stat) <- gsub("X", "", rownames(stat))
+
+kable(stat, caption = "Percentage of time swimming by Condition and Time", align = "c")
+```
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 6, fig.height = 4.5, message = FALSE, warning = FALSE}
+ggplot(data = df, aes(x = Time, y = Swim, group = Fish_ID, color = Condition)) + 
+  geom_point(size = 1, show.legend = FALSE) + 
+  geom_line(size = .3, show.legend = FALSE) +
+  scale_y_continuous(breaks = seq(0,100, 5)) +
+  geom_smooth(aes(group = Condition), method = "lm", 
+              formula = y ~ x, size = 1, se = TRUE, color = "black") +
+  theme_classic() +
+  scale_color_manual(values = brewer.pal(n = 3, "Dark2")) + 
+  ylab("% time swimming") +
+  facet_wrap(~ Condition) +
+  theme( 
+    axis.text = element_text(color = "black"),
+    axis.title.x = element_blank() )
+```
+
+\newpage
+
+### Linear mixed model with Wald chi-square tests 
+
+No significant effects of Condition and Time factors or their interaction were found on the percentage of time swimming.
+
+```{r, echo = FALSE}
+fitlmm <- lmer(Swim ~ Condition*Time + (1|Trial_ID/Fish_ID), data = df)
+car::Anova(fitlmm)
+```
+
+\newpage
+
+### Tukey's post hoc tests
+
+Table: Post hoc pairwise comparisons with Tukey's method - Mean differences between t0 and t10 by Condition
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 2.5, message = FALSE}
+emm.out <- emmeans(fitlmm, pairwise ~ Time | Condition)$emmeans
+kable(emm.out)
+emm.out <- emmeans(fitlmm, pairwise ~ Time | Condition)$contrasts
+emm.out0 <- emm.out
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + 
+  theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 8), axis.text.y = element_text(size = 10, color = "black") )
+```
+
+\newpage
+
+Table: Post hoc pairwise comparisons with Tukey's method - Mean differences between E3 and 5-HT at t0 and t10
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 2.5}
+emm.out <- emmeans(fitlmm, pairwise ~ Condition | Time)$emmeans
+kable(emm.out)
+emm.out <- emmeans(fitlmm, pairwise ~ Condition | Time)$contrasts
+emm.out0 <- emm.out
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 8), axis.text.y = element_text(size = 10, color = "black") )
+```
+
+\newpage
+
+### Checking model assumptions
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 6.5, fig.height = 3.5}
+par(mfrow = c(1,2), las = 1)
+hist(residuals(fitlmm), xlab = "residuals", ylab = "density",
+     cex.main = 1, cex.axis = .9,
+     main = "Histogram of residuals", proba = TRUE)
+qqnorm(residuals(fitlmm), cex.main = 1, cex.axis = .9, main = "Normal Q-Q Plot", cex = .4)
+```
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 3.5, fig.height = 3.2}
+plot(fitlmm, cex = .5, col = "dodgerblue4")
+```
+
+### Conclusion
+
+\textcolor{red}{Type II Wald chi-square tests for the fitted model indicated did not show any effect of Condition and Time on the percentage of time swimming.}
+
+\newpage
+
+## Speed (square root transformed data) (Figure 5B)
+
+### Descriptive data
+
+```{r, echo = FALSE}
+stat <- with( df, data.frame( tapply(sqrt(Speed), list(Condition, Time), stat.quanti, dec = 2) ) )
+stat <- t(stat)
+rownames(stat) <- gsub("X", "", rownames(stat))
+
+kable(stat, caption = "Speed by Condition and Time", align = "c")
+```
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 6, fig.height = 4.5, message = FALSE, warning = FALSE}
+ggplot(data = df, aes(x = Time, y = Speed, group = Fish_ID, color = Condition)) + 
+  geom_point(size = 1, show.legend = FALSE) + 
+  geom_line(size = .3, show.legend = FALSE) +
+  scale_y_continuous(breaks = seq(0, 16, 1)) +
+  geom_smooth(aes(group = Condition), method = "lm", 
+              formula = y ~ x, size = 1, se = TRUE, color = "black") +
+  theme_classic() +
+  ylab(as.expression(bquote("Speed" ~ (mm.s^{-1})))) +
+  scale_color_manual(values = brewer.pal(n = 3, "Dark2")) +
+  theme( 
+    axis.text= element_text(color = "black"),
+    axis.title.x = element_blank() ) +
+  facet_wrap(~Condition)
+```
+
+\newpage
+
+### Linear mixed model with Wald chi-square tests
+
+No significant main effects or interaction of Condition and Time were found on Speed.
+
+```{r, echo = FALSE}
+fitlmm <- lmer(sqrt(Speed) ~ Condition*Time + (1|Trial_ID/Fish_ID), data = df)
+car::Anova(fitlmm)
+```
+
+\newpage
+
+### Tukey's post hoc tests
+
+Table: Post hoc pairwise comparisons with Tukey's method - Mean differences between t0 and t10 by Condition (back-transformed estimate values from the sqrt scale)
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 2.5, message = FALSE}
+emm.out <- emmeans(fitlmm, ~ Time | Condition, type = "response")
+emm.out <- regrid(emm.out)
+kable(emm.out)
+emm.out <- pairs(emm.out)
+emm.out0 <- emm.out
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 8), axis.text.y = element_text(size = 10, color = "black") )
+```
+
+\newpage
+
+Table: Post hoc pairwise comparisons with Tukey's method - Mean differences between E3 and 5-HT at t0 and t10 (back-transformed estimate values from the sqrt scale)
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 2.5}
+emm.out <- emmeans(fitlmm, ~ Condition | Time, type = "response")
+emm.out <- regrid(emm.out)
+kable(emm.out)
+emm.out <- pairs(emm.out)
+emm.out0 <- emm.out
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + 
+  theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 8), axis.text.y = element_text(size = 10, color = "black") )
+```
+
+\newpage
+
+### Checking model assumptions
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 6.5, fig.height = 3.5}
+par(mfrow = c(1,2), las = 1)
+hist(residuals(fitlmm), xlab = "residuals", ylab = "density",
+     cex.main = 1, cex.axis = .9,
+     main = "Histogram of residuals", proba = TRUE)
+qqnorm(residuals(fitlmm), cex.main = 1, cex.axis = .9, main = "Normal Q-Q Plot", cex = .4)
+```
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 3.5, fig.height = 3.2}
+plot(fitlmm, cex = .5, col = "dodgerblue4")
+```
+
+### Conclusion
+
+\textcolor{red}{Type II Wald chi-square tests for the fitted model indicated did not show any effect of Condition and Time on Speed.}
+
+\newpage
+
+# Effect of 5-HT on PLL-ablated larvae (Figure 5D-E)
+
+## Check for influential observations (Cook's distance)
+
+We excluded five larvae: FishID 14, FishID 29, FishID 56, FishID 68 and FishID 84.
+
+```{r, echo = FALSE, warning = FALSE, message = FALSE}
+tmp <- dat7
+
+df1 <- data.frame(
+  tmp[,c("Fish_ID", "Trial_ID", "Treatment", "Condition", "Swim_t0", "Speed_t0", "FQ_t0", "Turns_t0")], 
+             Time = "t0")
+df2 <- data.frame(
+  tmp[,c("Fish_ID", "Trial_ID", "Treatment", "Condition", "Swim_t10", "Speed_t10", "FQ_t10", "Turns_t10")], 
+             Time = "t10")
+colnames(df1) <- colnames(df2) <- c("Fish_ID", "Trial_ID", "Treatment", "Condition", "Swim", "Speed", "FQ", "Turns", "Time")
+df <- rbind(df1, df2)
+
+df$Speed <- as.numeric(df$Speed)
+df$Turns <- as.numeric(df$Turns)
+df <- na.omit(df)
+df$Treatment <- relevel(df$Treatment, "Sham ablation")
+
+# fitlmm1 <- lmer(sqrt(Speed) ~ Condition*Treatment*Time + (1|Trial_ID/Fish_ID), data = df)
+# fitlmm2 <- lmer(FQ ~ Condition*Treatment*Time + (1|Trial_ID/Fish_ID), data = df)
+# fitlmm3 <- lmer(Turns ~ Condition*Treatment*Time + (1|Trial_ID/Fish_ID), data = df)
+# fitlmm4 <- lmer(Swim ~ Condition*Treatment*Time + (1|Trial_ID/Fish_ID), data = df)
+# 
+# infl1 <- influence(fitlmm1, obs = TRUE)
+# infl2 <- influence(fitlmm2, obs = TRUE)
+# infl3 <- influence(fitlmm3, obs = TRUE)
+# infl4 <- influence(fitlmm4, obs = TRUE)
+# 
+# infl.pts <- data.frame(FishID = df$Fish_ID, Condition = df$Condition, Time = df$Time,
+#                   Speed = df$Speed, FQ = df$FQ, Turns = df$Turns, Swim = df$Swim,
+#                   CookD1 = cooks.distance.estex(infl1),
+#                   CookD2 = cooks.distance.estex(infl2),
+#                   CookD3 = cooks.distance.estex(infl3),
+#                   CookD4 = cooks.distance.estex(infl4) )
+# 
+# s <- 2*4/nrow(dat7)
+# 
+# outlier <- infl.pts$CookD1 > s | infl.pts$CookD2 > s | infl.pts$CookD3 > s | infl.pts$CookD4 > s
+# 
+# infl.pts <- data.frame( infl.pts,
+#             outlier.Speed = infl.pts$CookD1 > s,
+#             outlier.FQ = infl.pts$CookD2 > s,
+#             outlier.Turns = infl.pts$CookD3 > s,
+#             outlier.Swim = infl.pts$CookD4 > s )
+# 
+# infl.pts <- infl.pts[outlier,]
+# 
+# outlier <- sort(unique(infl.pts$FishID))
+# 
+# infl.pts[, c("Swim", "Speed", "FQ", "Turns", "CookD1", "CookD2", "CookD3", "CookD4")] <- round(infl.pts[, c("Swim", "Speed", "FQ", "Turns", "CookD1", "CookD2", "CookD3", "CookD4")], 3)
+# 
+# d1 <- data.frame( infl.pts[ infl.pts$outlier.Speed == TRUE, c("FishID", "Condition", "Time", "Speed", "CookD1")],
+#             parameter = "Speed" )
+# d2 <- data.frame( infl.pts[ infl.pts$outlier.Turns == TRUE, c("FishID", "Condition", "Time", "Turns", "CookD3")],
+#             parameter = "Turns" )
+# d3 <- data.frame( infl.pts[ infl.pts$outlier.Swim == TRUE, c("FishID", "Condition", "Time", "Swim", "CookD4")],
+#             parameter = "Swim" )
+# 
+# colnames(d1) <- colnames(d2) <- colnames(d3) <- c("FishID", "Condition", "Time", "Value", "CookD", "Parameter")
+# 
+# d0 <- rbind(d1, d2, d3)
+# 
+# write.table(d0, "Data/InfluentialPoints_Effect_PLLAblation&5HT.txt", row.names = TRUE, col.names = NA, sep = "\t", quote = FALSE)
+
+d0 <- read.table("Data/InfluentialPoints_Effect_PLLAblation&5HT.txt", row.names = 1, header = TRUE, sep = "\t")
+d0 <- d0[order(d0$FishID, d0$Parameter, d0$Time),]
+
+kable(d0, align = "c", caption = "Influential observations across all the parameters")
+
+outlier <- c(14, 29, 56, 68, 84)
+
+if (length(outlier) > 0) df <- df[ !(df$Fish_ID %in% outlier), ]
+```
+
+\newpage
+
+## Percentage of time swimming (Figure 5D)
+
+### Descriptive data
+
+```{r, echo = FALSE}
+stat <- with( df, data.frame( tapply(Swim, list(Treatment, Condition, Time), stat.quanti, dec = 2) ) )
+stat <- t(stat)
+rownames(stat) <- gsub("X", "", rownames(stat))
+
+kable(stat, caption = "Percentage of time swimming by Treatment, Condition and Time", align = "c")
+```
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 6, fig.height = 4.5, message = FALSE, warning = FALSE}
+ggplot(data = df, aes(x = Time, y = Swim, group = Fish_ID, color = Condition)) + 
+  geom_point(size = 1, show.legend = FALSE) +
+  geom_line(size = .3, show.legend = FALSE) +
+  geom_smooth(aes(group = Condition), method = "lm", 
+              formula = y ~ x, size = 1, se = TRUE, color = "black") +
+  theme_classic() +
+  ylab("% time swimming") +
+  scale_color_manual(values = brewer.pal(n = 3, "Dark2")) +
+  facet_grid(Treatment ~ Condition) +
+  theme( 
+    axis.text = element_text(color = "black"),
+    axis.title.x = element_blank() )
+```
+
+\newpage
+
+### Linear mixed model with Wald chi-square tests
+
+Significant three way interaction effect of Treatment (Sham ablation, PLL ablation), Condition (E3, 5-HT) and Time (t0, t10) (Wald $\chi^2$ = 4.05, df = 1, $^{*}p$ = 0.044) on the percentage of time swimming.  
+
+```{r, echo = FALSE}
+fitlmm <- lmer(Swim ~ Condition*Treatment*Time + (1|Trial_ID/Fish_ID), data = df)
+car::Anova(fitlmm)
+```
+
+\newpage
+
+### Tukey's post hoc tests
+
+Table: Post hoc pairwise comparisons with Tukey's method - Mean differences between t0 and t10 by Condition and Treatment
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 5}
+fitlmm <- lmer(Swim ~ Treatment*Time*Condition + (1|Trial_ID/Fish_ID), data = df)
+emm.out <- emmeans(fitlmm, pairwise ~ Time | Condition*Treatment)$emmeans
+kable(emm.out)
+emm.out <- emmeans(fitlmm, pairwise ~ Time | Condition*Treatment)$contrasts
+emm.out0 <- emm.out
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + 
+  theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 9), axis.text.y = element_text(size = 10) )
+```
+
+\newpage
+
+Table: Post hoc pairwise comparisons with Tukey's method - Mean differences between E3 and 5-HT at t0 and t10 by treatment group
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 4, note = FALSE, warning = FALSE}
+fitlmm <- lmer(Swim ~ Treatment*Time*Condition + (1|Trial_ID/Fish_ID), data = df)
+emm.out <- emmeans(fitlmm, pairwise ~ Condition | Time*Treatment)$emmeans
+kable(emm.out)
+emm.out <- emmeans(fitlmm, pairwise ~ Condition | Time*Treatment)$contrasts
+emm.out0 <- emm.out
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + 
+  theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 8), axis.text.y = element_text(size = 10) )
+```
+
+\newpage
+
+### Checking model assumptions
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 6.5, fig.height = 3.5}
+par(mfrow = c(1,2), las = 1)
+hist(residuals(fitlmm), xlab = "residuals", ylab = "density",
+     cex.main = 1, cex.axis = .9,
+     main = "Histogram of residuals", proba = TRUE)
+qqnorm(residuals(fitlmm), cex.main = 1, cex.axis = .9, main = "Normal Q-Q Plot", cex = .4)
+```
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 3.5, fig.height = 3.2}
+plot(fitlmm, cex = .5, col = "dodgerblue4")
+```
+
+### Conclusion
+
+\textcolor{red}{Type II Wald chi-square tests for the fitted model indicated three way interaction effect of Treatment (Sham ablation, PLL ablation), Condition (E3, 5-HT) and Time (t0, t10) (Wald $\chi^2$ = 4.05, df = 1, $^{*}p$ = 0.044) on the percentage of time swimming. Post hoc tests using Tukey's method indicated a significant difference between t0 and t10 in 5-HT with Sham ablation ($^{**}p$ = 0.0012).}
+
+\newpage
+
+## Speed (square root transformed data) (Figure 5E)
+
+### Descriptive data
+
+```{r, echo = FALSE}
+stat <- with( df, data.frame( tapply(Speed, list(Treatment, Condition, Time), stat.quanti, dec = 2) ) )
+stat <- t(stat)
+rownames(stat) <- gsub("X", "", rownames(stat))
+
+kable(stat, caption = "Speed by Treatment, Condition and Time", align = "c")
+```
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 6, fig.height = 4.5, message = FALSE, warning = FALSE}
+ggplot(data = df, aes(x = Time, y = Speed, group = Fish_ID, color = Condition)) + 
+  geom_point(size = 1, show.legend = FALSE) +
+  geom_line(size = .3, show.legend = FALSE) +
+  geom_smooth(aes(group = Condition), method = "lm", 
+              formula = y ~ x, size = 1, se = TRUE, color = "black") +
+  theme_classic() +   ylab(as.expression(bquote("Speed" ~ (mm.s^{-1})))) +
+  scale_color_manual(values = brewer.pal(n = 3, "Dark2")) +
+  facet_grid(Treatment ~ Condition) +
+  theme(
+    axis.text = element_text(color = "black"),
+    axis.title.x = element_blank() )
+```
+
+\newpage
+
+### Linear mixed model with Wald chi-square tests
+
+Trend for a non significant interaction effect of Condition (5-HT, E3) and Time (t0, t10) (Wald $\chi^2$ = 3.42, df = 1, $^{ns}p$ = 0.065) on Speed. No differences were observed between the treatment groups (Sham ablation, PLL ablation) (Wald $\chi^2$ = 0.66, df = 1, $^{ns}p$ = 0.42).
+
+```{r, echo = FALSE}
+fitlmm <- lmer(sqrt(Speed) ~ Condition*Treatment*Time + (1|Fish_ID), data = df)
+car::Anova(fitlmm)
+```
+
+\newpage
+
+### Tukey's post hoc tests
+
+Table: Post hoc pairwise comparisons with Tukey's method - Mean differences between t0 and t10 by Condition (back-transformed estimate values from the sqrt scale)
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 2.5, message = FALSE}
+fitlmm <- lmer(sqrt(Speed) ~ Condition*Treatment + Condition*Time + Treatment*Time + (1|Trial_ID/Fish_ID), data = df)
+emm.out <- emmeans(fitlmm, ~ Time | Condition, type = "response")
+emm.out <- regrid(emm.out)
+kable(emm.out)
+emm.out <- pairs(emm.out)
+emm.out0 <- emm.out 
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + 
+  theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 9), axis.text.y = element_text(size = 10) )
+```
+
+\newpage
+
+Table: Post hoc pairwise comparisons with Tukey's method - Mean differences between EM and 5-HT at t0 and t10 (back-transformed estimate values from the sqrt scale)
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 2.5, message = FALSE}
+fitlmm <- lmer(sqrt(Speed) ~ Condition*Treatment + Condition*Time + Treatment*Time + (1|Trial_ID/Fish_ID), data = df)
+emm.out <- emmeans(fitlmm, ~ Condition | Time, type = "response")
+emm.out <- regrid(emm.out)
+kable(emm.out)
+emm.out <- pairs(emm.out)
+emm.out0 <- emm.out 
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 8), axis.text.y = element_text(size = 10) )
+```
+
+\newpage
+
+Table: Post hoc pairwise comparisons with Tukey's method - Mean differences between t0 and t10 by Treatment (back-transformed estimate values from the sqrt scale)
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 2.5, message = FALSE}
+fitlmm <- lmer(sqrt(Speed) ~ Condition*Treatment + Condition*Time + Treatment*Time + (1|Trial_ID/Fish_ID), data = df)
+emm.out <- emmeans(fitlmm, ~ Time | Treatment, type = "response")
+emm.out <- regrid(emm.out)
+kable(emm.out)
+emm.out <- pairs(emm.out)
+emm.out0 <- emm.out
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") +
+  theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 9), axis.text.y = element_text(size = 10) )
+```
+
+\newpage
+
+Table: Post hoc pairwise comparisons with Tukey's method - Mean differences between Sham ablation and PLL ablation at t0 and t10 (back-transformed estimate values from the sqrt scale)
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 2.5, message = FALSE}
+fitlmm <- lmer(sqrt(Speed) ~ Condition*Treatment + Condition*Time + Treatment*Time + (1|Trial_ID/Fish_ID), data = df)
+emm.out <- emmeans(fitlmm, ~ Treatment | Time, type = "response")
+emm.out <- regrid(emm.out)
+kable(emm.out)
+emm.out <- pairs(emm.out)
+emm.out0 <- emm.out
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 8), axis.text.y = element_text(size = 10) )
+```
+
+\newpage
+
+Table: Post hoc pairwise comparisons with Tukey's method - Mean differences between t0 and t10 by Condition and Treatment
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 5, message = FALSE, warning = FALSE}
+fitlmm <- lmer(sqrt(Speed) ~ Treatment*Time*Condition + (1|Trial_ID/Fish_ID), data = df)
+emm.out <- emmeans(fitlmm, pairwise ~ Time | Condition*Treatment)$emmeans
+kable(emm.out)
+emm.out <- emmeans(fitlmm, pairwise ~ Time | Condition*Treatment)$contrasts
+emm.out0 <- emm.out
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + 
+  theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 9), axis.text.y = element_text(size = 10, color = "black") )
+```
+
+\newpage
+
+Table: Post hoc pairwise comparisons with Tukey's method - Mean differences between E3 and 5-HT at t0 and t10 by treatment group
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 4, message = FALSE, warning = FALSE}
+fitlmm <- lmer(sqrt(Speed) ~ Treatment*Time*Condition + (1|Trial_ID/Fish_ID), data = df)
+emm.out <- emmeans(fitlmm, pairwise ~ Condition | Time*Treatment)$emmeans
+kable(emm.out)
+emm.out <- emmeans(fitlmm, pairwise ~ Condition | Time*Treatment)$contrasts
+emm.out0 <- emm.out
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + 
+  theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 9), axis.text.y = element_text(size = 10, color = "black") )
+```
+
+\newpage
+
+Table: Post hoc pairwise comparisons with Tukey's method - Mean differences between Sham and Ablation by Condition (back-transformed estimate values from the sqrt scale)
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 2.5, message = FALSE}
+fitlmm <- lmer(sqrt(Speed) ~ Condition*Treatment + Condition*Time + Treatment*Time + (1|Trial_ID/Fish_ID), data = df)
+emm.out <- emmeans(fitlmm, ~ Treatment | Condition, type = "response")
+emm.out <- regrid(emm.out)
+emm.out <- pairs(emm.out)
+emm.out0 <- emm.out 
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 9), axis.text.y = element_text(size = 10, color = "black") )
+```
+
+\newpage
+
+Table: Post hoc pairwise comparisons with Tukey's method - Mean differences between EM and 5-HT by Treatment (back-transformed estimate values from the sqrt scale)
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 3.2}
+fitlmm <- lmer(sqrt(Speed) ~ Condition*Treatment + Condition*Time + Treatment*Time + (1|Trial_ID/Fish_ID), data = df)
+emm.out <- emmeans(fitlmm, ~ Condition | Treatment, type = "response")
+emm.out <- regrid(emm.out)
+emm.out <- pairs(emm.out)
+emm.out0 <- emm.out 
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 9), axis.text.y = element_text(size = 10, color = "black") )
+```
+
+\newpage
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 5, message = FALSE, warning = FALSE}
+fitlmm <- lmer(sqrt(Speed) ~ Condition*Treatment*Time + (1|Trial_ID/Fish_ID), data = df)
+emm.out <- emmeans(fitlmm, ~ Treatment*Condition | Time, type = "response")
+emm.out <- regrid(emm.out)
+kable(emm.out)
+emm.out <- pairs(emm.out)
+emm.out0 <- emm.out
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + 
+  theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 9), axis.text.y = element_text(size = 9, color = "black") )
+```
+
+\newpage
+
+### Checking model assumptions
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 6.5, fig.height = 3.5}
+par(mfrow = c(1,2), las = 1)
+hist(residuals(fitlmm), xlab = "residuals", ylab = "density",
+     cex.main = 1, cex.axis = .9,
+     main = "Histogram of residuals", proba = TRUE)
+qqnorm(residuals(fitlmm), cex.main = 1, cex.axis = .9, main = "Normal Q-Q Plot", cex = .4)
+```
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 3.5, fig.height = 3.2}
+plot(fitlmm, cex = .5, col = "dodgerblue4")
+```
+
+### Conclusion
+
+\textcolor{red}{Type II Wald chi-square tests for the fitted model indicated a trend for a non significant interaction effect of Condition and Time (Wald $\chi^2$ = 3.42, df = 1, $^{ns}p$ = 0.065) on Speed. Post hoc tests using Tukey's method showed differences between t0 and t10 in 5-HT (faster at t10) ($^{***}p$ = 5.4e-5), between E3 and 5-HT at t10 (faster in 5-HT) ($^{**}p$ = 0.005); while no differences were observed between t0 and t10 in E3 ($^{ns}p$ = 0.061), and between E3 and 5-HT at t0 ($^{ns}p$ = 0.51). No differences were observed between the treatment groups (Sham ablation, PLL ablation) (Wald $\chi^2$ = 0.66, df = 1, $^{ns}p$ = 0.42).}
+
+\newpage
+
+# Effect of 5-HT on OMP-ablated larvae (Figures 5F-G)
+
+## Check for influential observations (Cook's distance)
+
+We removed two larvae: FishID 83 and FishID 119.  
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+tmp <- dat8
+
+df1 <- data.frame(
+  tmp[,c("Fish_ID", "Trial_ID", "Treatment", "Condition", "Swim_t0", "Speed_t0", "FQ_t0", "Turns_t0")], 
+             Time = "t0")
+df2 <- data.frame(
+  tmp[,c("Fish_ID", "Trial_ID", "Treatment", "Condition", "Swim_t10", "Speed_t10", "FQ_t10", "Turns_t10")], 
+             Time = "t10")
+colnames(df1) <- colnames(df2) <- c("Fish_ID", "Trial_ID", "Treatment", "Condition", "Swim", "Speed", "FQ", "Turns", "Time")
+df <- rbind(df1, df2)
+
+df$Speed <- as.numeric(df$Speed)
+df$Turns <- as.numeric(df$Turns)
+
+df <- na.omit(df)
+df$Treatment <- relevel(df$Treatment, "Control")
+
+# fitlmm1 <- lmer(sqrt(Speed) ~ Condition*Treatment*Time + (1|Trial_ID/Fish_ID), data = df)
+# fitlmm2 <- lmer(FQ ~ Condition*Treatment*Time + (1|Trial_ID/Fish_ID), data = df)
+# fitlmm3 <- lmer(Turns ~ Condition*Treatment*Time + (1|Trial_ID/Fish_ID), data = df)
+# fitlmm4 <- lmer(Swim ~ Condition*Treatment*Time + (1|Trial_ID/Fish_ID), data = df)
+# 
+# infl1 <- influence(fitlmm1, obs = TRUE)
+# infl2 <- influence(fitlmm2, obs = TRUE)
+# infl3 <- influence(fitlmm3, obs = TRUE)
+# infl4 <- influence(fitlmm4, obs = TRUE)
+# 
+# infl.pts <- data.frame(FishID = df$Fish_ID, Condition = df$Condition,
+#                   Treatment = df$Treatment,
+#                   Time = df$Time,
+#                   Speed = df$Speed, FQ = df$FQ, Turns = df$Turns, Swim = df$Swim,
+#                   CookD1 = cooks.distance.estex(infl1),
+#                   CookD2 = cooks.distance.estex(infl2),
+#                   CookD3 = cooks.distance.estex(infl3),
+#                   CookD4 = cooks.distance.estex(infl4) )
+# 
+# s <- 2*4/nrow(dat8)
+# 
+# outlier <- infl.pts$CookD1 > s | infl.pts$CookD2 > s | infl.pts$CookD3 > s | infl.pts$CookD4 > s
+# 
+# infl.pts <- data.frame( infl.pts,
+#             outlier.Speed = infl.pts$CookD1 > s,
+#             outlier.FQ = infl.pts$CookD2 > s,
+#             outlier.Turns = infl.pts$CookD3 > s,
+#             outlier.Swim = infl.pts$CookD4 > s )
+# 
+# infl.pts <- infl.pts[outlier,]
+# 
+# outlier <- sort(unique(infl.pts$FishID))
+# 
+# infl.pts[, c("Swim", "Speed", "FQ", "Turns", "CookD1", "CookD2", "CookD3", "CookD4")] <- round(infl.pts[, c("Swim", "Speed", "FQ", "Turns", "CookD1", "CookD2", "CookD3", "CookD4")], 3)
+# 
+# # d1 <- data.frame( infl.pts[ infl.pts$outlier.Speed == TRUE, c("FishID", "Condition", "Treatment", "Time", "Speed", "CookD1")], parameter = "Speed" )
+# d2 <- data.frame( infl.pts[ infl.pts$outlier.FQ == TRUE, c("FishID", "Condition", "Treatment", "Time", "FQ", "CookD2")], parameter = "FQ" )
+# d3 <- data.frame( infl.pts[ infl.pts$outlier.Turns == TRUE, c("FishID", "Condition", "Treatment", "Time", "Turns", "CookD3")], parameter = "Turns" )
+# # d4 <- data.frame( infl.pts[ infl.pts$outlier.Swim == TRUE, c("FishID", "Condition", "Treatment", "Time", "Swim", "CookD4")], parameter = "Swim" )
+# 
+# colnames(d2) <- colnames(d3) <- c("FishID", "Condition", "Time", "Value", "CookD", "Parameter")
+# 
+# d0 <- rbind(d2, d3)
+# 
+# write.table(d0, "Data/InfluentialPoints_Effect_OlfactoryAblation&5HT.txt", row.names = TRUE, col.names = NA, sep = "\t", quote = FALSE)
+
+d0 <- read.table("Data/InfluentialPoints_Effect_OlfactoryAblation&5HT.txt", row.names = 1, header = TRUE, sep = "\t")
+d0 <- d0[order(d0$FishID, d0$Parameter, d0$Time),]
+
+kable(d0, align = "c", caption = "Influential observations across all the parameters")
+
+outlier <- c(83, 119)
+
+if (length(outlier) > 0) df <- df[ !(df$Fish_ID %in% outlier), ]
+```
+
+\newpage
+
+## Percentage of time swimming (Figure 5F)
+
+### Descriptive data
+
+```{r, echo = FALSE}
+stat <- with( df, data.frame( tapply(Swim, list(Treatment, Condition, Time), stat.quanti, dec = 2) ) )
+stat <- t(stat)
+rownames(stat) <- gsub("X", "", rownames(stat))
+
+kable(stat, caption = "Percentage of time swimming by Treatment, Condition and Time", align = "c")
+```
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 6, fig.height = 4.5, message = FALSE, warning = FALSE}
+ggplot(data = df, aes(x = Time, y = Swim, group = Fish_ID, color = Condition)) + 
+  geom_point(size = 1, show.legend = FALSE) +
+  geom_line(size = .3, show.legend = FALSE) +
+  geom_smooth(aes(group = Condition), method = "lm", 
+              formula = y ~ x, size = 1, se = TRUE, color = "black") +
+  theme_classic() +
+  ylab("% time swimming") +
+  scale_color_manual(values = brewer.pal(n = 3, "Dark2")) +
+  facet_grid(Treatment ~ Condition) +
+  theme( 
+    axis.text = element_text(color = "black"),
+    axis.title.x = element_blank() )
+```
+
+\newpage
+
+### Linear mixed model with Wald chi-square tests
+
+Significant interaction between Condition (5-HT, E3) and Time (t0, t10) on the percentage of time swimming (Wald $\chi^2$ = 22.02, df = 1, $^{***}p$ = 2.7e-6). No differences were observed between the treatment groups (Control, OMP ablation) (Wald $\chi^2$ = 0.06, df = 1, $^{ns}p$ = 0.81).
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+fitlmm <- lmer(Swim ~ Condition*Treatment*Time + (1|Trial_ID/Fish_ID), data = df)
+car::Anova(fitlmm)
+```
+
+\newpage
+
+### Tukey's post hoc tests
+
+Table: Post hoc pairwise comparisons with Tukey's method - Mean differences between t0 and t10 by Condition (E3, 5-HT)
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 2.5, message = FALSE}
+fitlmm <- lmer(Swim ~ Condition*Time + (1|Trial_ID/Fish_ID), data = df)
+emm.out <- emmeans(fitlmm, pairwise ~ Time | Condition)$emmeans
+kable(emm.out)
+emm.out <- emmeans(fitlmm, pairwise ~ Time | Condition)$contrasts
+emm.out0 <- emm.out
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + 
+  theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 9), axis.text.y = element_text(size = 10, color = "black") )
+```
+
+\newpage
+
+Table: Post hoc pairwise comparisons with Tukey's method - Mean differences between E3 and 5-HT at t0 and t10
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 2.5}
+emm.out <- emmeans(fitlmm, pairwise ~ Condition | Time)$emmeans
+kable(emm.out)
+emm.out <- emmeans(fitlmm, pairwise ~ Condition | Time)$contrasts
+emm.out0 <- emm.out
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + 
+  theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 9), axis.text.y = element_text(size = 10, color = "black") )
+```
+
+\newpage
+
+Table: Post hoc pairwise comparisons with Tukey's method - Mean differences between t0 and t10 by Condition and Treatment
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 5, message = FALSE, warning = FALSE}
+fitlmm <- lmer(Swim ~ Treatment*Time*Condition + (1|Trial_ID/Fish_ID), data = df)
+emm.out <- emmeans(fitlmm, pairwise ~ Time | Condition*Treatment)$emmeans
+kable(emm.out)
+emm.out <- emmeans(fitlmm, pairwise ~ Time | Condition*Treatment)$contrasts
+emm.out0 <- emm.out
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + 
+  theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 9), axis.text.y = element_text(size = 10, color = "black") )
+```
+
+\newpage
+
+Table: Post hoc pairwise comparisons with Tukey's method - Mean differences between E3 and 5-HT at t0 and t10 by treatment group
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 4, message = FALSE, warning = FALSE}
+fitlmm <- lmer(Swim ~ Treatment*Time*Condition + (1|Trial_ID/Fish_ID), data = df)
+emm.out <- emmeans(fitlmm, pairwise ~ Condition | Time*Treatment)$emmeans
+kable(emm.out)
+emm.out <- emmeans(fitlmm, pairwise ~ Condition | Time*Treatment)$contrasts
+emm.out0 <- emm.out
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + 
+  theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 9), axis.text.y = element_text(size = 10, color = "black") )
+```
+
+\newpage
+
+Table: Post hoc pairwise comparisons with Tukey's method - Mean differences between Control and OMP ablation by Condition
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 2.5, message = FALSE}
+fitlmm <- lmer(Swim ~ Condition*Treatment + Condition*Time + Treatment*Time + (1|Trial_ID/Fish_ID), data = df)
+emm.out <- emmeans(fitlmm, ~ Treatment | Condition, type = "response")
+kable(emm.out)
+emm.out <- pairs(emm.out)
+emm.out0 <- emm.out 
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 8), axis.text.y = element_text(size = 10) )
+```
+
+\newpage
+
+Table: Post hoc pairwise comparisons with Tukey's method - Mean differences between E3 and 5-HT by Treatment
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 3.2}
+fitlmm <- lmer(Swim ~ Condition*Treatment + Condition*Time + Treatment*Time + (1|Trial_ID/Fish_ID), data = df)
+emm.out <- emmeans(fitlmm, ~ Condition | Treatment, type = "response")
+kable(emm.out)
+emm.out <- pairs(emm.out)
+emm.out0 <- emm.out 
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 9), axis.text.y = element_text(size = 10, color = "black") )
+```
+
+\newpage
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 5, message = FALSE, warning = FALSE}
+fitlmm <- lmer(Swim ~ Condition*Treatment*Time + (1|Trial_ID/Fish_ID), data = df)
+emm.out <- emmeans(fitlmm, ~ Treatment*Condition | Time, type = "response")
+emm.out <- regrid(emm.out)
+kable(emm.out)
+emm.out <- pairs(emm.out)
+emm.out0 <- emm.out
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + 
+  theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 9), axis.text.y = element_text(size = 9, color = "black") )
+```
+
+\newpage
+
+### Checking model assumptions
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 6.5, fig.height = 3.5}
+par(mfrow = c(1,2), las = 1)
+hist(residuals(fitlmm), xlab = "residuals", ylab = "density",
+     cex.main = 1, cex.axis = .9,
+     main = "Histogram of residuals", proba = TRUE)
+qqnorm(residuals(fitlmm), cex.main = 1, cex.axis = .9, main = "Normal Q-Q Plot", cex = .4)
+```
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 3.5, fig.height = 3.2}
+plot(fitlmm, cex = .5, col = "dodgerblue4")
+```
+
+### Conclusion
+
+\textcolor{red}{Type II Wald chi-square tests for the fitted model indicated a significant interaction effect between Condition (E3, 5-HT) and Time (t0, t10) (Wald $\chi^2$ = 22.02, df = 1, $^{***}p$ = 2.7e-6) on the percentage of time swimming. Post hoc tests using Tukey's method only indicated significant differences between t0 and t10 in 5-HT ($^{***}p$ = 2.6e-10), and between E3 and 5-HT at t10 ($^{**}p$ = 8.9e-8); while no differences were observed between t0 and t10 in E3 ($^{ns}p$ = 0.77), and between E3 and 5-HT at t0 ($^{ns}p$ = 0.88). No differences were observed between the treatment groups (Control, OMP ablation) (Wald $\chi^2$ = 0.06, df = 1, $^{ns}p$ = 0.86).}
+
+\newpage
+
+## Speed (square root transformed data) (Figure 5G)
+
+### Descriptive data
+
+```{r, echo = FALSE}
+stat <- with( df, data.frame( tapply(Speed, list(Treatment, Condition, Time), stat.quanti, dec = 2) ) )
+stat <- t(stat)
+rownames(stat) <- gsub("X", "", rownames(stat))
+
+kable(stat, caption = "Speed by Treatment, Condition and Time", align = "c")
+```
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 6, fig.height = 4.5, message = FALSE, warning = FALSE}
+ggplot(data = df, aes(x = Time, y = Speed, group = Fish_ID, color = Condition)) + 
+  geom_point(size = 1, show.legend = FALSE) +
+  geom_line(size = .3, show.legend = FALSE) +
+  geom_smooth(aes(group = Condition), method = "lm", 
+              formula = y ~ x, size = 1, se = TRUE, color = "black") +
+  theme_classic() +
+  ylab(as.expression(bquote("Speed" ~ (mm.s^{-1})))) +
+  scale_color_manual(values = brewer.pal(n = 3, "Dark2")) +
+  facet_grid(Treatment ~ Condition) +
+  theme(
+    axis.text = element_text(color = "black"),
+    axis.title.x = element_blank() )
+```
+
+\newpage
+
+### Linear mixed model with Wald chi-square tests
+
+Significant interaction between Condition (5-HT, E3) and Time (t0, t10) on Speed (Wald $\chi^2$ = 15.66, df = 1, $^{***}p$ = 7.6e-5). No differences were observed between the treatment groups (Control, OMP ablation) (Wald $\chi^2$ = 0.0023, df = 1, $^{ns}p$ = 0.96).
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+fitlmm <- lmer(sqrt(Speed) ~ Condition*Treatment*Time + (1|Trial_ID/Fish_ID), data = df)
+car::Anova(fitlmm)
+```
+
+\newpage
+
+### Tukey's post hoc tests
+
+Table: Post hoc pairwise comparisons with Tukey's method - Mean differences between t0 and t10 by Condition (back-transformed estimate values from the sqrt scale)
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 2.5, message = FALSE}
+fitlmm <- lmer(sqrt(Speed) ~ Condition*Treatment + Condition*Time + Treatment*Time + (1|Trial_ID/Fish_ID), data = df)
+emm.out <- emmeans(fitlmm, ~ Time | Condition, type = "response")
+emm.out <- regrid(emm.out)
+kable(emm.out)
+emm.out <- pairs(emm.out)
+emm.out0 <- emm.out 
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + 
+  theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 9), axis.text.y = element_text(size = 10) )
+```
+
+\newpage
+
+Table: Post hoc pairwise comparisons with Tukey's method - Mean differences between E3 and 5-HT at t0 and t10 (back-transformed estimate values from the sqrt scale)
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 2.5, message = FALSE}
+fitlmm <- lmer(sqrt(Speed) ~ Condition*Treatment + Condition*Time + Treatment*Time + (1|Trial_ID/Fish_ID), data = df)
+emm.out <- emmeans(fitlmm, ~ Condition | Time, type = "response")
+emm.out <- regrid(emm.out)
+kable(emm.out)
+emm.out <- pairs(emm.out)
+emm.out0 <- emm.out 
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 9), axis.text.y = element_text(size = 10, color = "black") )
+```
+
+\newpage
+
+Table: Post hoc pairwise comparisons with Tukey's method - Mean differences between t0 and t10 by Condition and Treatment
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 5, message = FALSE, warning = FALSE}
+fitlmm <- lmer(sqrt(Speed) ~ Treatment*Time*Condition + (1|Trial_ID/Fish_ID), data = df)
+emm.out <- emmeans(fitlmm, ~ Time | Condition*Treatment, type = "response")
+emm.out <- regrid(emm.out)
+kable(emm.out)
+emm.out <- pairs(emm.out)
+emm.out0 <- emm.out
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + 
+  theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 9), axis.text.y = element_text(size = 10, color = "black") )
+```
+
+\newpage
+
+Table: Post hoc pairwise comparisons with Tukey's method - Mean differences between E3 and 5-HT at t0 and t10 by treatment group
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 4, message = FALSE, warning = FALSE}
+fitlmm <- lmer(sqrt(Speed) ~ Treatment*Time*Condition + (1|Trial_ID/Fish_ID), data = df)
+emm.out <- emmeans(fitlmm, ~ Condition | Time*Treatment, type = "response")
+emm.out <- regrid(emm.out)
+kable(emm.out)
+emm.out <- pairs(emm.out)
+emm.out0 <- emm.out
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + 
+  theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 8), axis.text.y = element_text(size = 10) )
+```
+
+\newpage
+
+Table: Post hoc pairwise comparisons with Tukey's method - Mean differences between Control and OMP ablation by Condition (back-transformed estimate values from the sqrt scale)
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 2.5, message = FALSE}
+fitlmm <- lmer(sqrt(Speed) ~ Condition*Treatment + Condition*Time + Treatment*Time + (1|Trial_ID/Fish_ID), data = df)
+emm.out <- emmeans(fitlmm, ~ Treatment | Condition, type = "response")
+emm.out <- regrid(emm.out)
+kable(emm.out)
+emm.out <- pairs(emm.out)
+emm.out0 <- emm.out 
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 9), axis.text.y = element_text(size = 10, color = "black") )
+```
+
+\newpage
+
+Table: Post hoc pairwise comparisons with Tukey's method - Mean differences between E3 and 5-HT by Treatment (back-transformed estimate values from the sqrt scale)
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 3.2}
+fitlmm <- lmer(sqrt(Speed) ~ Condition*Treatment + Condition*Time + Treatment*Time + (1|Trial_ID/Fish_ID), data = df)
+emm.out <- emmeans(fitlmm, ~ Condition | Treatment, type = "response")
+emm.out <- regrid(emm.out)
+emm.out <- pairs(emm.out)
+emm.out0 <- emm.out 
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 9), axis.text.y = element_text(size = 10, color = "black") )
+```
+
+\newpage
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 7, fig.height = 5, message = FALSE, warning = FALSE}
+fitlmm <- lmer(sqrt(Speed) ~ Condition*Treatment*Time + (1|Trial_ID/Fish_ID), data = df)
+emm.out <- emmeans(fitlmm, ~ Treatment*Condition | Time, type = "response")
+emm.out <- regrid(emm.out)
+kable(emm.out)
+emm.out <- pairs(emm.out)
+emm.out0 <- emm.out
+emm.out <- data.frame(emm.out)
+emm.out$estimate <- round(emm.out$estimate, 2)
+emm.out$SE <- round(emm.out$SE, 2)
+emm.out$df <- round(emm.out$df, 1)
+emm.out$t.ratio <- round(emm.out$t.ratio, 3)
+kable(emm.out)
+
+plot(emm.out0) + geom_vline(xintercept = 0, color = "red", size = .7, linetype = "dashed") + 
+  theme_bw() +
+  theme( strip.background = element_rect(colour = "black", fill = "white"),
+         strip.text = element_text(size = 9), axis.text.y = element_text(size = 9, color = "black") )
+```
+
+\newpage
+
+### Checking model assumptions
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 6.5, fig.height = 3.5}
+par(mfrow = c(1,2), las = 1)
+hist(residuals(fitlmm), xlab = "residuals", ylab = "density",
+     cex.main = 1, cex.axis = .9,
+     main = "Histogram of residuals", proba = TRUE)
+qqnorm(residuals(fitlmm), cex.main = 1, cex.axis = .9, main = "Normal Q-Q Plot", cex = .4)
+```
+
+```{r, echo = FALSE, fig.align = 'center', fig.width = 3.5, fig.height = 3.2}
+plot(fitlmm, cex = .5, col = "dodgerblue4")
+```
+
+### Conclusion
+
+\textcolor{red}{Type II Wald chi-square tests for the fitted model indicated a significant interaction effect between Condition and Time on Speed (Wald $\chi^2$ = 15.66, df = 1, $^{***}p$ = 7.6e-5). Post hoc tests using Tukey's method showed a difference between t0 and t10 in 5-HT ($^{***}p$ = 1.1e-8), and between E3 and 5-HT at t10 ($^{***}p$ = 9.0e-6), while no differences were observed between t0 and t10 in E3 ($^{ns}p$ = 0.25), and between E3 and 5-HT at t0 ($^{ns}p$ = 0.97). No differences were observed between the treatment groups (Control, OMP ablation) (Wald $\chi^2$ = 0.0023, df = 1, $^{ns}p$ = 0.96).}
+
+\newpage
+
+# R session information
+
+```{r, echo = FALSE}
+sessionInfo()
+```

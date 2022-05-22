@@ -1,0 +1,9 @@
+	FishID	Condition	Time	Value	CookD	Parameter
+113	68	E3	t10	0	0.252	Speed
+189	84	5-HT	t10	14.579	0.09	Speed
+8	29	E3	t0	0	0.161	Turns
+75	14	5-HT	t0	0	0.104	Turns
+104	29	E3	t10	100	0.156	Turns
+109	56	E3	t10	100	0.11	Turns
+12	56	E3	t0	51.087	0.139	Swim
+1091	56	E3	t10	0.067	0.125	Swim

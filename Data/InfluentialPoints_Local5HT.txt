@@ -1,0 +1,5 @@
+	FishID	Condition	Time	Value	CookD	Parameter
+304	55	Local 5-HT	5cm	42.136	0.083	Speed
+459	57	Local 5-HT	7cm	40.91	0.07	Speed
+4591	57	Local 5-HT	7cm	6.25	0.065	FQ
+358	112	Local 5-HT	5cm	35.102	0.08	Speed
